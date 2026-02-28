@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Simple Tracker</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 24px auto; padding: 0 12px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 12px 0; }
+    input, button { padding: 10px; margin: 6px 6px 6px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .kpi { font-size: 22px; font-weight: 700; }
+    .muted { color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Simple Entries Dashboard</h1>
+
+  <div class="card" id="authCard">
+    <h2>Login</h2>
+    <div class="row">
+      <input id="email" type="email" placeholder="Email" />
+      <input id="password" type="password" placeholder="Password" />
+      <button id="loginBtn">Login</button>
+      <button id="logoutBtn" style="display:none;">Logout</button>
+    </div>
+    <div class="muted" id="authStatus">Not logged in.</div>
+  </div>
+
+  <div class="card">
+    <h2>Add Entry</h2>
+    <div class="row">
+      <input id="entryDate" type="date" />
+      <input id="entryValue" type="number" step="0.01" placeholder="Value (e.g. 50.00)" />
+      <button id="addBtn">Add</button>
+    </div>
+    <div class="muted" id="addStatus"></div>
+  </div>
+
+  <div class="card">
+    <h2>Report</h2>
+    <div class="row">
+      <label>From <input id="fromDate" type="date" /></label>
+      <label>To <input id="toDate" type="date" /></label>
+      <button id="loadBtn">Load</button>
+    </div>
+
+    <div class="row" style="justify-content: space-between;">
+      <div>
+        <div class="muted">Total</div>
+        <div class="kpi" id="total">$0.00</div>
+      </div>
+      <div>
+        <div class="muted">Entries</div>
+        <div class="kpi" id="count">0</div>
+      </div>
+      <div>
+        <div class="muted">Average per entry</div>
+        <div class="kpi" id="avg">$0.00</div>
+      </div>
+    </div>
+
+    <h3>Entries</h3>
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Value</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <!-- Supabase JS (CDN) -->
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+    const SUPABASE_URL = "https://azjmxefeeolzcwttztyp.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_Sg0OZHLnBt2sVdRjsGhDpA_5FrTgSVZ";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // UI helpers
+    const $ = (id) => document.getElementById(id);
+    const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+
+    async function refreshAuthUI() {
+      const { data: { session } } = await supabase.auth.getSession();
+      const loggedIn = !!session;
+
+      $("loginBtn").style.display = loggedIn ? "none" : "inline-block";
+      $("logoutBtn").style.display = loggedIn ? "inline-block" : "none";
+      $("authStatus").textContent = loggedIn ? `Logged in as ${session.user.email}` : "Not logged in.";
+    }
+
+    // Default dates (this week)
+    function setDefaults() {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      $("entryDate").value = `${yyyy}-${mm}-${dd}`;
+      $("toDate").value = `${yyyy}-${mm}-${dd}`;
+
+      // From = 7 days ago
+      const from = new Date(today);
+      from.setDate(today.getDate() - 6);
+      const fyyyy = from.getFullYear();
+      const fmm = String(from.getMonth() + 1).padStart(2, "0");
+      const fdd = String(from.getDate()).padStart(2, "0");
+      $("fromDate").value = `${fyyyy}-${fmm}-${fdd}`;
+    }
+
+    async function login() {
+      $("authStatus").textContent = "Logging in...";
+      const email = $("email").value.trim();
+      const password = $("password").value;
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        $("authStatus").textContent = `Login error: ${error.message}`;
+        return;
+      }
+      await refreshAuthUI();
+      $("authStatus").textContent = "Logged in.";
+    }
+
+    async function logout() {
+      await supabase.auth.signOut();
+      await refreshAuthUI();
+    }
+
+    async function addEntry() {
+      $("addStatus").textContent = "";
+      const date = $("entryDate").value;
+      const value = Number($("entryValue").value);
+
+      if (!date) return $("addStatus").textContent = "Pick a date.";
+      if (!Number.isFinite(value)) return $("addStatus").textContent = "Enter a valid value.";
+
+      const { error } = await supabase.from("entries").insert({ date, value });
+      if (error) {
+        $("addStatus").textContent = `Insert error: ${error.message}`;
+        return;
+      }
+
+      $("entryValue").value = "";
+      $("addStatus").textContent = "Saved ✅";
+    }
+
+    async function loadReport() {
+      const from = $("fromDate").value;
+      const to = $("toDate").value;
+      if (!from || !to) return;
+
+      // Supabase date filters: gte/lte
+      const { data, error } = await supabase
+        .from("entries")
+        .select("date,value")
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: true });
+
+      if (error) {
+        alert(`Load error: ${error.message}`);
+        return;
+      }
+
+      // Compute totals
+      const total = (data || []).reduce((sum, r) => sum + Number(r.value || 0), 0);
+      const count = (data || []).length;
+      const avg = count ? total / count : 0;
+
+      $("total").textContent = money(total);
+      $("count").textContent = String(count);
+      $("avg").textContent = money(avg);
+
+      // Render rows
+      const tbody = $("rows");
+      tbody.innerHTML = "";
+      for (const r of (data || [])) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${r.date}</td><td>${money(r.value)}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+
+    // Wire up buttons
+    $("loginBtn").addEventListener("click", login);
+    $("logoutBtn").addEventListener("click", logout);
+    $("addBtn").addEventListener("click", addEntry);
+    $("loadBtn").addEventListener("click", loadReport);
+
+    // Init
+    setDefaults();
+    await refreshAuthUI();
+    supabase.auth.onAuthStateChange(() => refreshAuthUI());
+  </script>
+</body>
+</html>
