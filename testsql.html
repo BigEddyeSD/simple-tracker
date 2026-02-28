@@ -3,85 +3,145 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>My Simple Tracker</title>
+  <title>Simple Tracker</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: 24px auto; padding: 0 12px; }
-    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 12px 0; }
-    input, button { padding: 10px; margin: 6px 6px 6px 0; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
-    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .kpi { font-size: 22px; font-weight: 700; }
-    .muted { color: #666; font-size: 13px; }
+    :root { --border:#e6e6e6; --muted:#666; }
+    body { font-family: Arial, sans-serif; max-width: 980px; margin: 24px auto; padding: 0 14px; }
+    h1 { margin: 0 0 10px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 12px 0; background: #fff; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    input, button { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); font-size: 14px; }
+    button { cursor: pointer; }
+    button.primary { border-color: #000; background: #000; color: #fff; }
+    button.ghost { background: #fff; }
+    .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+    .kpi { border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { font-size: 24px; font-weight: 800; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #f0f0f0; padding: 10px 6px; text-align: left; }
+    th { font-size: 12px; color: var(--muted); font-weight: 700; }
+    .right { text-align: right; }
+    .spacer { flex: 1; }
+
+    /* Print: hide auth + entry form, keep report */
+    @media print {
+      #authCard, #addCard, #quickButtons, #loadBtn, #printBtn { display: none !important; }
+      body { margin: 0; max-width: none; }
+      .card { border: none; }
+    }
   </style>
 </head>
 <body>
-  <h1>Simple Entries Dashboard</h1>
+  <h1>Simple Tracker</h1>
+  <div class="muted">Insert entries. Filter any date range. Get totals instantly.</div>
 
   <div class="card" id="authCard">
-    <h2>Login</h2>
+    <h2 style="margin:0 0 10px;">Login</h2>
     <div class="row">
-      <input id="email" type="email" placeholder="Email" />
-      <input id="password" type="password" placeholder="Password" />
-      <button id="loginBtn">Login</button>
-      <button id="logoutBtn" style="display:none;">Logout</button>
+      <input id="email" type="email" placeholder="Email" autocomplete="email" />
+      <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+      <button id="loginBtn" class="primary">Login</button>
+      <button id="logoutBtn" class="ghost" style="display:none;">Logout</button>
+      <div class="spacer"></div>
+      <div class="muted" id="authStatus">Not logged in.</div>
     </div>
-    <div class="muted" id="authStatus">Not logged in.</div>
   </div>
 
-  <div class="card">
-    <h2>Add Entry</h2>
+  <div class="card" id="addCard">
+    <h2 style="margin:0 0 10px;">Add Entry</h2>
     <div class="row">
+      <label class="muted">Date</label>
       <input id="entryDate" type="date" />
-      <input id="entryValue" type="number" step="0.01" placeholder="Value (e.g. 50.00)" />
-      <button id="addBtn">Add</button>
+      <label class="muted">Value</label>
+      <input id="entryValue" type="number" step="0.01" placeholder="50.00" inputmode="decimal" />
+      <button id="addBtn" class="primary">Add</button>
+      <div class="muted" id="addStatus"></div>
     </div>
-    <div class="muted" id="addStatus"></div>
+    <div class="muted" style="margin-top:8px;">Tip: after typing value, press Enter to add.</div>
   </div>
 
-  <div class="card">
-    <h2>Report</h2>
-    <div class="row">
-      <label>From <input id="fromDate" type="date" /></label>
-      <label>To <input id="toDate" type="date" /></label>
-      <button id="loadBtn">Load</button>
+  <div class="card" id="reportCard">
+    <h2 style="margin:0 0 10px;">Report</h2>
+
+    <div class="row" id="quickButtons">
+      <label class="muted">From</label>
+      <input id="fromDate" type="date" />
+      <label class="muted">To</label>
+      <input id="toDate" type="date" />
+
+      <button id="loadBtn" class="primary">Load</button>
+      <button id="last7Btn" class="ghost">Last 7 Days</button>
+      <button id="thisWeekBtn" class="ghost">This Week</button>
+      <button id="thisMonthBtn" class="ghost">This Month</button>
+
+      <div class="spacer"></div>
+      <button id="printBtn" class="ghost">Print</button>
     </div>
 
-    <div class="row" style="justify-content: space-between;">
-      <div>
-        <div class="muted">Total</div>
-        <div class="kpi" id="total">$0.00</div>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Total</div>
+        <div class="value" id="total">$0.00</div>
       </div>
-      <div>
-        <div class="muted">Entries</div>
-        <div class="kpi" id="count">0</div>
+      <div class="kpi">
+        <div class="label">Entries</div>
+        <div class="value" id="count">0</div>
       </div>
-      <div>
-        <div class="muted">Average per entry</div>
-        <div class="kpi" id="avg">$0.00</div>
+      <div class="kpi">
+        <div class="label">Average per entry</div>
+        <div class="value" id="avg">$0.00</div>
       </div>
     </div>
 
-    <h3>Entries</h3>
+    <h3 style="margin:14px 0 6px;">Entries</h3>
     <table>
       <thead>
-        <tr><th>Date</th><th>Value</th></tr>
+        <tr>
+          <th style="width:160px;">Date</th>
+          <th class="right" style="width:160px;">Value</th>
+        </tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
+
+    <div class="muted" id="reportStatus" style="margin-top:10px;"></div>
   </div>
 
-  <!-- Supabase JS (CDN) -->
   <script type="module">
     import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
+    // Your Supabase settings
     const SUPABASE_URL = "https://azjmxefeeolzcwttztyp.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_Sg0OZHLnBt2sVdRjsGhDpA_5FrTgSVZ";
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // UI helpers
     const $ = (id) => document.getElementById(id);
     const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+
+    function toISODate(d) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function startOfWeekMonday(d) {
+      const x = new Date(d);
+      const day = x.getDay(); // 0=Sun..6=Sat
+      const diff = (day === 0 ? -6 : 1 - day); // Monday start
+      x.setDate(x.getDate() + diff);
+      x.setHours(0,0,0,0);
+      return x;
+    }
+
+    function startOfMonth(d) {
+      const x = new Date(d.getFullYear(), d.getMonth(), 1);
+      x.setHours(0,0,0,0);
+      return x;
+    }
 
     async function refreshAuthUI() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -90,24 +150,23 @@
       $("loginBtn").style.display = loggedIn ? "none" : "inline-block";
       $("logoutBtn").style.display = loggedIn ? "inline-block" : "none";
       $("authStatus").textContent = loggedIn ? `Logged in as ${session.user.email}` : "Not logged in.";
+
+      // Optional: disable entry/report actions when not logged in
+      $("addBtn").disabled = !loggedIn;
+      $("loadBtn").disabled = !loggedIn;
+      $("last7Btn").disabled = !loggedIn;
+      $("thisWeekBtn").disabled = !loggedIn;
+      $("thisMonthBtn").disabled = !loggedIn;
     }
 
-    // Default dates (this week)
-    function setDefaults() {
+    function setDefaultDates() {
       const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
-      $("entryDate").value = `${yyyy}-${mm}-${dd}`;
-      $("toDate").value = `${yyyy}-${mm}-${dd}`;
+      $("entryDate").value = toISODate(today);
+      $("toDate").value = toISODate(today);
 
-      // From = 7 days ago
       const from = new Date(today);
       from.setDate(today.getDate() - 6);
-      const fyyyy = from.getFullYear();
-      const fmm = String(from.getMonth() + 1).padStart(2, "0");
-      const fdd = String(from.getDate()).padStart(2, "0");
-      $("fromDate").value = `${fyyyy}-${fmm}-${fdd}`;
+      $("fromDate").value = toISODate(from);
     }
 
     async function login() {
@@ -127,12 +186,14 @@
     async function logout() {
       await supabase.auth.signOut();
       await refreshAuthUI();
+      $("authStatus").textContent = "Logged out.";
     }
 
     async function addEntry() {
       $("addStatus").textContent = "";
       const date = $("entryDate").value;
-      const value = Number($("entryValue").value);
+      const raw = $("entryValue").value;
+      const value = Number(raw);
 
       if (!date) return $("addStatus").textContent = "Pick a date.";
       if (!Number.isFinite(value)) return $("addStatus").textContent = "Enter a valid value.";
@@ -148,11 +209,12 @@
     }
 
     async function loadReport() {
+      $("reportStatus").textContent = "";
       const from = $("fromDate").value;
       const to = $("toDate").value;
       if (!from || !to) return;
 
-      // Supabase date filters: gte/lte
+      $("reportStatus").textContent = "Loading...";
       const { data, error } = await supabase
         .from("entries")
         .select("date,value")
@@ -161,37 +223,70 @@
         .order("date", { ascending: true });
 
       if (error) {
-        alert(`Load error: ${error.message}`);
+        $("reportStatus").textContent = `Load error: ${error.message}`;
         return;
       }
 
-      // Compute totals
-      const total = (data || []).reduce((sum, r) => sum + Number(r.value || 0), 0);
-      const count = (data || []).length;
+      const rows = data || [];
+      const total = rows.reduce((sum, r) => sum + Number(r.value || 0), 0);
+      const count = rows.length;
       const avg = count ? total / count : 0;
 
       $("total").textContent = money(total);
       $("count").textContent = String(count);
       $("avg").textContent = money(avg);
 
-      // Render rows
       const tbody = $("rows");
       tbody.innerHTML = "";
-      for (const r of (data || [])) {
+      for (const r of rows) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${r.date}</td><td>${money(r.value)}</td>`;
+        tr.innerHTML = `<td>${r.date}</td><td class="right">${money(r.value)}</td>`;
         tbody.appendChild(tr);
       }
+
+      $("reportStatus").textContent = count ? `Showing ${count} entries.` : "No entries in this range.";
     }
 
-    // Wire up buttons
+    function setRangeAndLoad(from, to) {
+      $("fromDate").value = from;
+      $("toDate").value = to;
+      return loadReport();
+    }
+
+    // Buttons
     $("loginBtn").addEventListener("click", login);
     $("logoutBtn").addEventListener("click", logout);
     $("addBtn").addEventListener("click", addEntry);
     $("loadBtn").addEventListener("click", loadReport);
 
+    $("last7Btn").addEventListener("click", async () => {
+      const today = new Date();
+      const from = new Date(today);
+      from.setDate(today.getDate() - 6);
+      await setRangeAndLoad(toISODate(from), toISODate(today));
+    });
+
+    $("thisWeekBtn").addEventListener("click", async () => {
+      const today = new Date();
+      const from = startOfWeekMonday(today);
+      await setRangeAndLoad(toISODate(from), toISODate(today));
+    });
+
+    $("thisMonthBtn").addEventListener("click", async () => {
+      const today = new Date();
+      const from = startOfMonth(today);
+      await setRangeAndLoad(toISODate(from), toISODate(today));
+    });
+
+    $("printBtn").addEventListener("click", () => window.print());
+
+    // Enter key = add
+    $("entryValue").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addEntry();
+    });
+
     // Init
-    setDefaults();
+    setDefaultDates();
     await refreshAuthUI();
     supabase.auth.onAuthStateChange(() => refreshAuthUI());
   </script>
